@@ -50,6 +50,7 @@ const (
 
 	defaultDescription    = "Created with Docker Machine"
 	defaultStorageProfile = ""
+	defaultNamePrefix     = "docker-machine"
 )
 
 func NewDriver(hostName, storePath string) drivers.Driver {
@@ -275,6 +276,55 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage:  "vCloud Director vApp template",
 			Value:  defaultTemplate,
 		},
+
+		mcnflag.IntFlag{
+			EnvVar: "VCD_DOCKER_PORT",
+			Name:   "vcd-docker-port",
+			Usage:  "vCloud Director Docker Port",
+			Value:  defaultDockerPort,
+		},
+		mcnflag.IntFlag{
+			EnvVar: "VCD_SSH_PORT",
+			Name:   "vcd-ssh-port",
+			Usage:  "vCloud Director SSH Port",
+			Value:  defaultSSHPort,
+		},
+		mcnflag.IntFlag{
+			EnvVar: "VCD_NUM_CPUS",
+			Name:   "vcd-numcpus",
+			Usage:  "vCloud Director Num CPUs",
+			Value:  defaultCpus,
+		},
+		mcnflag.IntFlag{
+			EnvVar: "VCD_CORES_PER_SOCKET",
+			Name:   "vcd-corespersocket",
+			Usage:  "vCloud Director Cores Per Socket",
+			Value:  defaultCoresPerSocket,
+		},
+		mcnflag.IntFlag{
+			EnvVar: "VCD_MEMORY_SIZE_MB",
+			Name:   "vcd-memory-size-mb",
+			Usage:  "vCloud Director Memory Size MB",
+			Value:  defaultMemoryMb,
+		},
+		mcnflag.StringFlag{
+			EnvVar: "VCD_STORAGE_PROFILE",
+			Name:   "vcd-storageprofile",
+			Usage:  "vCloud Director Storage Profile",
+			Value:  defaultStorageProfile,
+		},
+		mcnflag.StringFlag{
+			EnvVar: "VCD_DESCRIPTION",
+			Name:   "vcd-description",
+			Usage:  "vCloud Director VApp Description",
+			Value:  defaultDescription,
+		},
+		mcnflag.StringFlag{
+			EnvVar: "VCD_NAME_PREFIX",
+			Name:   "vcd-name-prefix",
+			Usage:  "vCloud Director VApp Name Prefix",
+			Value:  defaultNamePrefix,
+		},
 	}
 }
 
@@ -492,8 +542,8 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.VcdUser = flags.String("vcd-user")
 	d.VcdPassword = flags.String("vcd-password")
 	d.VcdOrgVDCNetwork = flags.String("vcd-orgvdcnetwork")
-	d.Catalog = flags.String("catalog")
-	d.Template = flags.String("template")
+	d.Catalog = flags.String("vcd-catalog")
+	d.Template = flags.String("vcd-template")
 
 	d.SetSwarmConfigFromFlags(flags)
 
@@ -516,6 +566,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.MemorySizeMb = flags.Int("vcd-memory-size-mb")
 	d.StorageProfile = flags.String("vcd-storageprofile")
 	d.Description = flags.String("vcd-description")
+	d.MachineNamePrefix = flags.String("vcd-name-prefix")
 
 	return nil
 }
