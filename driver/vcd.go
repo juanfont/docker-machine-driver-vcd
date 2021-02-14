@@ -549,7 +549,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 
 	// Check for required Params
 	if vcdURL == "" || d.VcdOrg == "" || d.VcdVdc == "" || d.VcdUser == "" || d.VcdPassword == "" || d.VcdOrgVDCNetwork == "" || d.Catalog == "" || d.Template == "" {
-		return fmt.Errorf("Please specify the mandatory parameters: -vcd-url, -vcd-org, -vcd-vdc, -vcd-user, -vcd-password, -vdc-orgvdcnetwork, -catalog, -template")
+		return fmt.Errorf("Please specify the mandatory parameters: -vcd-url, -vcd-org, -vcd-vdc, -vcd-user, -vcd-password, -vcd-orgvdcnetwork, -catalog, -template")
 	}
 
 	u, err := url.ParseRequestURI(vcdURL)
