@@ -176,6 +176,8 @@ func (d *Driver) Create() error {
 			time.Sleep(5 * time.Second)
 			log.Infof("Waiting for VM deploy. Status: %s", status)
 		}
+		status, _ := vm.GetStatus()
+		log.Infof("Status: %s", status)
 		cWait <- "ok"
 	}()
 
