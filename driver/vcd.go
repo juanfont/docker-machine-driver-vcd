@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/docker/machine/libmachine/log"
@@ -164,6 +165,25 @@ func (d *Driver) Create() error {
 		return err
 	}
 	log.Infof("Found VM: %s...", vm.VM.Name)
+
+	cWait := make(chan string, 1)
+	go func() {
+		for {
+			status, _ := vm.GetStatus()
+			if status == "POWERED_OFF" {
+				break
+			}
+			log.Infof("Waiting for VM deploy. Status: %s", status)
+		}
+		cWait <- "ok"
+	}()
+
+	select {
+	case res := <-cWait:
+		fmt.Println(res)
+	case <-time.After(15 * time.Minute):
+		return fmt.Errorf("Reached timeout while deploying VM")
+	}
 
 	if vm.VM.VmSpecSection == nil {
 		log.Infof("VM Spec Section empty")
