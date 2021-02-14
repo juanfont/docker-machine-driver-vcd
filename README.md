@@ -13,4 +13,8 @@ ToDo.
 
 
 ## Credits 
-This driver is partially based on the original vmwarevcloudair (https://github.com/docker/machine/tree/master/drivers/vmwarevcloudair) and on https://github.com/jxoir/docker-machine-driver-vcloud-director.
+This driver is based on other drivers:
+
+- The original vmwarevcloudair https://github.com/docker/machine/tree/master/drivers/vmwarevcloudair
+- This vcd driver targeting an old version of govcd https://github.com/jxoir/docker-machine-driver-vcloud-director
+- The Scaleway driver, somehow https://github.com/scaleway/docker-machine-driver-scaleway
