@@ -261,7 +261,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		},
 		mcnflag.StringFlag{
 			EnvVar: "VDC_ORGVDCNETWORK",
-			Name:   "vdc-orgvdcnetwork",
+			Name:   "vcd-orgvdcnetwork",
 			Usage:  "vCloud Director OrgVDC network",
 		},
 		mcnflag.StringFlag{
