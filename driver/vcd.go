@@ -7,9 +7,11 @@ import (
 	"strconv"
 
 	"github.com/docker/machine/libmachine/drivers"
+	"github.com/docker/machine/libmachine/log"
 	"github.com/docker/machine/libmachine/mcnflag"
 	"github.com/docker/machine/libmachine/state"
 	"github.com/vmware/go-vcloud-director/v2/govcd"
+	"github.com/vmware/go-vcloud-director/v2/types/v56"
 )
 
 type Driver struct {
@@ -22,14 +24,14 @@ type Driver struct {
 	VcdPassword      string
 	VcdOrgVDCNetwork string
 
-	EdgeGateway string
-	PublicIP    string
-	Catalog     string
-	Template    string
-	DockerPort  int
-	CPUCount    int
-	MemorySize  int
-	VAppID      string
+	Catalog        string
+	Template       string
+	DockerPort     int
+	CPUCount       int
+	MemorySize     int
+	VAppID         string
+	Description    string
+	StorageProfile string
 }
 
 const (
@@ -39,6 +41,9 @@ const (
 	defaultMemory     = 2048
 	defaultSSHPort    = 22
 	defaultDockerPort = 2376
+
+	defaultDescription    = "Created with Docker Machine"
+	defaultStorageProfile = ""
 )
 
 func NewDriver(hostName, storePath string) drivers.Driver {
@@ -53,11 +58,81 @@ func NewDriver(hostName, storePath string) drivers.Driver {
 			MachineName: hostName,
 			StorePath:   storePath,
 		},
+		Description:    defaultDescription,
+		StorageProfile: defaultStorageProfile,
 	}
 }
 
 // Create configures and creates a new vCD vm
 func (d *Driver) Create() (err error) {
+	client := govcd.NewVCDClient(*d.VcdURL, d.VcdInsecure)
+	err := client.Authenticate(d.VcdUser, d.VcdPassword, d.VcdOrg)
+	if err != nil {
+		return err
+	}
+	org, err := client.GetOrgByName(d.VcdOrg)
+	if err != nil {
+		return err
+	}
+	vdc, err := org.GetVDCByName(d.VcdVdc, false)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Finding network...")
+	net, err := vdc.GetOrgVdcNetworkByName(d.VcdOrgVDCNetwork, true)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Finding catalog...")
+	catalog, err := org.GetCatalogByName(d.Catalog, true)
+	if err != nil {
+		return err
+	}
+
+	log.Infof("Finding template...")
+	template, err := catalog.GetCatalogItemByName(d.Template, true)
+	if err != nil {
+		return err
+	}
+	vapptemplate, err := template.GetVAppTemplate()
+	if err != nil {
+		return err
+	}
+
+	var storageProfile types.Reference
+	if d.StorageProfile != "" {
+		storageProfile, err = vdc.FindStorageProfileReference(d.StorageProfile)
+		if err != nil {
+			return err
+		}
+	} else {
+
+		storageProfile, err = vdc.GetDefaultStorageProfileReference()
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Infof("Creating a new vApp: %s...", d.MachineName)
+	networks := []*types.OrgVDCNetwork{}
+	networks = append(networks, net.OrgVDCNetwork)
+	task, err := vdc.ComposeVApp(
+		networks,
+		vapptemplate,
+		storageProfile,
+		d.MachineName,
+		d.Description,
+		true)
+
+	if err != nil {
+		return err
+	}
+	if err = task.WaitTaskCompletion(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
