@@ -73,8 +73,7 @@ func NewDriver(hostName, storePath string) drivers.Driver {
 
 // Create configures and creates a new vCD vm
 func (d *Driver) Create() error {
-	client := govcd.NewVCDClient(*d.VcdURL, d.VcdInsecure)
-	err := client.Authenticate(d.VcdUser, d.VcdPassword, d.VcdOrg)
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
 	if err != nil {
 		return err
 	}
@@ -331,8 +330,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 // GetIP returns an IP or hostname that this host is available at
 // e.g. 1.2.3.4 or docker-host-d60b70a14d3a.cloudapp.net
 func (d *Driver) GetIP() (string, error) {
-	client := govcd.NewVCDClient(*d.VcdURL, d.VcdInsecure)
-	err := client.Authenticate(d.VcdUser, d.VcdPassword, d.VcdOrg)
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
 	if err != nil {
 		return "", err
 	}
@@ -383,8 +381,7 @@ func (d *Driver) GetURL() (string, error) {
 
 // GetState returns the state that the host is in (running, stopped, etc)
 func (d *Driver) GetState() (state.State, error) {
-	client := govcd.NewVCDClient(*d.VcdURL, d.VcdInsecure)
-	err := client.Authenticate(d.VcdUser, d.VcdPassword, d.VcdOrg)
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
 	if err != nil {
 		return state.Error, err
 	}
@@ -421,8 +418,7 @@ func (d *Driver) GetState() (state.State, error) {
 
 // Kill stops a host forcefully
 func (d *Driver) Kill() error {
-	client := govcd.NewVCDClient(*d.VcdURL, d.VcdInsecure)
-	err := client.Authenticate(d.VcdUser, d.VcdPassword, d.VcdOrg)
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
 	if err != nil {
 		return err
 	}
@@ -460,8 +456,7 @@ func (d *Driver) PreCreateCheck() error {
 
 // Remove a host
 func (d *Driver) Remove() error {
-	client := govcd.NewVCDClient(*d.VcdURL, d.VcdInsecure)
-	err := client.Authenticate(d.VcdUser, d.VcdPassword, d.VcdOrg)
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
 	if err != nil {
 		return err
 	}
@@ -501,8 +496,7 @@ func (d *Driver) Remove() error {
 // Restart a host. This may just call Stop(); Start() if the provider does not
 // have any special restart behaviour.
 func (d *Driver) Restart() error {
-	client := govcd.NewVCDClient(*d.VcdURL, d.VcdInsecure)
-	err := client.Authenticate(d.VcdUser, d.VcdPassword, d.VcdOrg)
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
 	if err != nil {
 		return err
 	}
@@ -573,8 +567,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 
 // Start a host
 func (d *Driver) Start() error {
-	client := govcd.NewVCDClient(*d.VcdURL, d.VcdInsecure)
-	err := client.Authenticate(d.VcdUser, d.VcdPassword, d.VcdOrg)
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
 	if err != nil {
 		return err
 	}
@@ -606,8 +599,7 @@ func (d *Driver) Start() error {
 
 // Stop a host gracefully
 func (d *Driver) Stop() error {
-	client := govcd.NewVCDClient(*d.VcdURL, d.VcdInsecure)
-	err := client.Authenticate(d.VcdUser, d.VcdPassword, d.VcdOrg)
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
 	if err != nil {
 		return err
 	}
