@@ -159,7 +159,15 @@ func (d *Driver) Create() error {
 
 	vm := govcd.NewVM(&client.Client)
 	vm.VM.HREF = vapp.VApp.Children.VM[0].HREF
-	vm.Refresh()
+	err = vm.Refresh()
+	if err != nil {
+		return err
+	}
+	log.Infof("Found VM: %s...", vm.VM.Name)
+
+	if vm.VM.VmSpecSection == nil {
+		log.Infof("VM Spec Section empty")
+	}
 	vm.VM.VmSpecSection.MemoryResourceMb.Configured = int64(d.MemorySizeMb)
 	vm.VM.VmSpecSection.NumCpus = &d.NumCpus
 	vm.VM.VmSpecSection.NumCoresPerSocket = &d.CoresPerSocket
