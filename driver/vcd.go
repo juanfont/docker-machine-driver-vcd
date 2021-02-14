@@ -170,8 +170,7 @@ func (d *Driver) Create() error {
 	go func() {
 		for {
 			status, _ := vm.GetStatus()
-			isDeployed, _ := vm.IsDeployed()
-			if status == "POWERED_OFF" && isDeployed {
+			if status == "POWERED_OFF" {
 				break
 			}
 			time.Sleep(5 * time.Second)
@@ -190,8 +189,9 @@ func (d *Driver) Create() error {
 	}
 
 	if vm.VM.VmSpecSection == nil {
-		log.Infof("VM Spec Section empty")
+		return fmt.Errorf("VM Spec Section empty")
 	}
+	vm.Refresh()
 	vm.VM.VmSpecSection.MemoryResourceMb.Configured = int64(d.MemorySizeMb)
 	vm.VM.VmSpecSection.NumCpus = &d.NumCpus
 	vm.VM.VmSpecSection.NumCoresPerSocket = &d.CoresPerSocket
