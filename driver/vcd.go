@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/docker/machine/libmachine/drivers"
 	"github.com/docker/machine/libmachine/log"
@@ -23,24 +24,29 @@ type Driver struct {
 	VcdUser          string
 	VcdPassword      string
 	VcdOrgVDCNetwork string
+	Catalog          string
+	Template         string
 
-	Catalog        string
-	Template       string
-	DockerPort     int
-	CPUCount       int
-	MemorySize     int
-	VAppID         string
-	Description    string
-	StorageProfile string
+	DockerPort        int
+	NumCpus           int
+	CoresPerSocket    int
+	MemorySizeMb      int
+	VAppName          string
+	VAppHREF          string
+	VMHREF            string
+	Description       string
+	StorageProfile    string
+	MachineNamePrefix string
 }
 
 const (
-	defaultCatalog    = "Public"
-	defaultTemplate   = "Ubuntu_Server_20.04"
-	defaultCpus       = 1
-	defaultMemory     = 2048
-	defaultSSHPort    = 22
-	defaultDockerPort = 2376
+	defaultCatalog        = "Public"
+	defaultTemplate       = "Ubuntu_Server_20.04"
+	defaultCpus           = 1
+	defaultCoresPerSocket = 1
+	defaultMemoryMb       = 2048
+	defaultSSHPort        = 22
+	defaultDockerPort     = 2376
 
 	defaultDescription    = "Created with Docker Machine"
 	defaultStorageProfile = ""
@@ -48,11 +54,12 @@ const (
 
 func NewDriver(hostName, storePath string) drivers.Driver {
 	return &Driver{
-		Catalog:    defaultCatalog,
-		Template:   defaultTemplate,
-		CPUCount:   defaultCpus,
-		MemorySize: defaultMemory,
-		DockerPort: defaultDockerPort,
+		Catalog:        defaultCatalog,
+		Template:       defaultTemplate,
+		NumCpus:        defaultCpus,
+		CoresPerSocket: defaultCoresPerSocket,
+		MemorySizeMb:   defaultMemoryMb,
+		DockerPort:     defaultDockerPort,
 		BaseDriver: &drivers.BaseDriver{
 			SSHPort:     defaultSSHPort,
 			MachineName: hostName,
@@ -64,7 +71,7 @@ func NewDriver(hostName, storePath string) drivers.Driver {
 }
 
 // Create configures and creates a new vCD vm
-func (d *Driver) Create() (err error) {
+func (d *Driver) Create() error {
 	client := govcd.NewVCDClient(*d.VcdURL, d.VcdInsecure)
 	err := client.Authenticate(d.VcdUser, d.VcdPassword, d.VcdOrg)
 	if err != nil {
@@ -108,21 +115,29 @@ func (d *Driver) Create() (err error) {
 			return err
 		}
 	} else {
-
-		storageProfile, err = vdc.GetDefaultStorageProfileReference()
+		if len(vdc.Vdc.VdcStorageProfiles.VdcStorageProfile) < 1 {
+			return fmt.Errorf("No storage profile available")
+		}
+		storageProfile = *(vdc.Vdc.VdcStorageProfiles.VdcStorageProfile[0])
 		if err != nil {
 			return err
 		}
 	}
 
-	log.Infof("Creating a new vApp: %s...", d.MachineName)
+	if d.MachineNamePrefix != "" {
+		d.VAppName = fmt.Sprintf("%s-%s", d.MachineNamePrefix, d.MachineName)
+	} else {
+		d.VAppName = d.MachineName
+	}
+
+	log.Infof("Creating a new vApp: %s...", d.VAppName)
 	networks := []*types.OrgVDCNetwork{}
 	networks = append(networks, net.OrgVDCNetwork)
 	task, err := vdc.ComposeVApp(
 		networks,
 		vapptemplate,
 		storageProfile,
-		d.MachineName,
+		d.VAppName,
 		d.Description,
 		true)
 
@@ -132,6 +147,55 @@ func (d *Driver) Create() (err error) {
 	if err = task.WaitTaskCompletion(); err != nil {
 		return err
 	}
+
+	vapp, err := vdc.GetVAppByName(d.VAppName, true)
+	if err != nil {
+		return err
+	}
+
+	if len(vapp.VApp.Children.VM) != 1 {
+		return fmt.Errorf("VM count != 1")
+	}
+
+	vm := govcd.NewVM(&client.Client)
+	vm.VM.HREF = vapp.VApp.Children.VM[0].HREF
+	vm.Refresh()
+	vm.VM.VmSpecSection.MemoryResourceMb.Configured = int64(d.MemorySizeMb)
+	vm.VM.VmSpecSection.NumCpus = &d.NumCpus
+	vm.VM.VmSpecSection.NumCoresPerSocket = &d.CoresPerSocket
+
+	log.Infof("Updating virtual hardware specs...")
+	vm, err = vm.UpdateVmSpecSection(vm.VM.VmSpecSection, d.Description)
+	if err != nil {
+		return err
+	}
+
+	key, err := d.createSSHKey()
+	if err != nil {
+		return err
+	}
+	sshCustomScript := "echo \"" + strings.TrimSpace(key) + "\" > /root/.ssh/authorized_keys"
+
+	log.Infof("Setting up guest customization...")
+	enabled := true
+	vm.VM.GuestCustomizationSection.Enabled = &enabled
+	vm.VM.GuestCustomizationSection.CustomizationScript = sshCustomScript
+	_, err = vm.SetGuestCustomizationSection(vm.VM.GuestCustomizationSection)
+	if err = task.WaitTaskCompletion(); err != nil {
+		return err
+	}
+
+	log.Infof("Booting up %s...", d.MachineName)
+	task, err = vapp.PowerOn()
+	if err != nil {
+		return err
+	}
+	if err = task.WaitTaskCompletion(); err != nil {
+		return err
+	}
+
+	d.VAppHREF = d.VAppHREF
+	d.VMHREF = vm.VM.HREF
 
 	return nil
 }
@@ -211,7 +275,7 @@ func (d *Driver) GetIP() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	vapp, err := vdc.GetVAppById(d.VAppID, true)
+	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
 	if err != nil {
 		return "", err
 	}
@@ -263,7 +327,7 @@ func (d *Driver) GetState() (state.State, error) {
 	if err != nil {
 		return state.Error, err
 	}
-	vapp, err := vdc.GetVAppById(d.VAppID, true)
+	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
 	if err != nil {
 		return state.Error, err
 	}
@@ -301,7 +365,7 @@ func (d *Driver) Kill() error {
 	if err != nil {
 		return err
 	}
-	vapp, err := vdc.GetVAppById(d.VAppID, true)
+	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
 	if err != nil {
 		return err
 	}
@@ -340,7 +404,7 @@ func (d *Driver) Remove() error {
 	if err != nil {
 		return err
 	}
-	vapp, err := vdc.GetVAppById(d.VAppID, true)
+	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
 	if err != nil {
 		return err
 	}
@@ -381,7 +445,7 @@ func (d *Driver) Restart() error {
 	if err != nil {
 		return err
 	}
-	vapp, err := vdc.GetVAppById(d.VAppID, true)
+	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
 	if err != nil {
 		return err
 	}
@@ -401,7 +465,39 @@ func (d *Driver) Restart() error {
 
 // SetConfigFromFlags configures the driver with the object that was returned
 // by RegisterCreateFlags
-func (d *Driver) SetConfigFromFlags(opts drivers.DriverOptions) error {
+func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
+	vcdURL := flags.String("vcd-url")
+	d.VcdOrg = flags.String("vcd-org")
+	d.VcdVdc = flags.String("vcd-vdc")
+	d.VcdInsecure = flags.Bool("vcd-insecure")
+	d.VcdUser = flags.String("vcd-user")
+	d.VcdPassword = flags.String("vcd-password")
+	d.VcdOrgVDCNetwork = flags.String("vcd-orgvdcnetwork")
+	d.Catalog = flags.String("catalog")
+	d.Template = flags.String("template")
+
+	d.SetSwarmConfigFromFlags(flags)
+
+	// Check for required Params
+	if vcdURL == "" || d.VcdOrg == "" || d.VcdVdc == "" || d.VcdUser == "" || d.VcdPassword == "" || d.VcdOrgVDCNetwork == "" || d.Catalog == "" || d.Template == "" {
+		return fmt.Errorf("Please specify the mandatory parameters: -vcd-url, -vcd-org, -vcd-vdc, -vcd-user, -vcd-password, -vdc-orgvdcnetwork, -catalog, -template")
+	}
+
+	u, err := url.ParseRequestURI(vcdURL)
+	if err != nil {
+		return fmt.Errorf("unable to pass url: %s", err)
+	}
+	d.VcdURL = u
+
+	d.DockerPort = flags.Int("vcd-docker-port")
+	d.SSHUser = "root"
+	d.SSHPort = flags.Int("vcd-ssh-port")
+	d.NumCpus = flags.Int("vcd-numcpus")
+	d.CoresPerSocket = flags.Int("vcd-corespersocket")
+	d.MemorySizeMb = flags.Int("vcd-memory-size-mb")
+	d.StorageProfile = flags.String("vcd-storageprofile")
+	d.Description = flags.String("vcd-description")
+
 	return nil
 }
 
@@ -420,7 +516,7 @@ func (d *Driver) Start() error {
 	if err != nil {
 		return err
 	}
-	vapp, err := vdc.GetVAppById(d.VAppID, true)
+	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
 	if err != nil {
 		return err
 	}
@@ -453,7 +549,7 @@ func (d *Driver) Stop() error {
 	if err != nil {
 		return err
 	}
-	vapp, err := vdc.GetVAppById(d.VAppID, true)
+	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
 	if err != nil {
 		return err
 	}
