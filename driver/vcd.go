@@ -170,6 +170,25 @@ func (d *Driver) Create() error {
 		return err
 	}
 
+	log.Infof("Clearing networks...")
+	empty := types.NetworkConnectionSection{}
+	vm.UpdateNetworkConnectionSection(&empty)
+	if err != nil {
+		return err
+	}
+	vm.Refresh()
+
+	log.Infof("Creating new network...")
+	netConn := &types.NetworkConnection{}
+	netConn.IPAddressAllocationMode = types.IPAllocationModePool
+	netConn.NetworkConnectionIndex = 0
+	netConn.Network = d.VcdOrgVDCNetwork
+	netConn.NetworkAdapterType = "VMXNET3"
+
+	netsec := vm.VM.NetworkConnectionSection
+	netsec.NetworkConnection = append(netsec.NetworkConnection, netConn)
+	vm.UpdateNetworkConnectionSection(netsec)
+
 	key, err := d.createSSHKey()
 	if err != nil {
 		return err
@@ -231,7 +250,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 		},
 		mcnflag.StringFlag{
 			EnvVar: "VCD_USERNAME",
-			Name:   "vcd-username",
+			Name:   "vcd-user",
 			Usage:  "vCloud Director username",
 		},
 		mcnflag.StringFlag{
