@@ -173,6 +173,7 @@ func (d *Driver) Create() error {
 			if status == "POWERED_OFF" {
 				break
 			}
+			time.Sleep(5 * time.Second)
 			log.Infof("Waiting for VM deploy. Status: %s", status)
 		}
 		cWait <- "ok"
