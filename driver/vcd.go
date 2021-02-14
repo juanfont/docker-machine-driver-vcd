@@ -170,7 +170,8 @@ func (d *Driver) Create() error {
 	go func() {
 		for {
 			status, _ := vm.GetStatus()
-			if status == "POWERED_OFF" {
+			isDeployed, _ := vm.IsDeployed()
+			if status == "POWERED_OFF" && isDeployed {
 				break
 			}
 			time.Sleep(5 * time.Second)
