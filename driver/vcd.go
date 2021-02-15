@@ -480,18 +480,23 @@ func (d *Driver) Remove() error {
 		return err
 	}
 
-	status, _ := vapp.GetStatus()
-	if status != "POWERED_OFF" {
-		task, err := vapp.PowerOff() // we no longer care, so no shutdown
-		if err != nil {
-			return err
-		}
+	task, err := vapp.PowerOff()
+	if err == nil {
+		log.Infof("Powering off...")
 		if err = task.WaitTaskCompletion(); err != nil {
 			return err
 		}
 	}
 
-	task, err := vapp.Delete()
+	task, err = vapp.Undeploy()
+	if err == nil {
+		log.Infof("Undeploying...")
+		if err = task.WaitTaskCompletion(); err != nil {
+			return err
+		}
+	}
+
+	task, err = vapp.Delete()
 	if err != nil {
 		return err
 	}
@@ -588,7 +593,7 @@ func (d *Driver) Start() error {
 	return nil
 }
 
-// Stop a host gracefully
+// Stop a host not so gracefully
 func (d *Driver) Stop() error {
 	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
 	if err != nil {
@@ -600,7 +605,7 @@ func (d *Driver) Stop() error {
 	if err != nil {
 		return err
 	}
-	task, err := vapp.Shutdown()
+	task, err := vapp.PowerOff()
 	if err != nil {
 		return err
 	}
