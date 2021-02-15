@@ -5,7 +5,6 @@ import (
 	"net"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/docker/machine/libmachine/drivers"
@@ -174,10 +173,9 @@ func (d *Driver) Create() error {
 				break
 			}
 			time.Sleep(5 * time.Second)
-			log.Infof("Waiting for VM deploy. Status: %s", status)
 		}
-		status, _ := vm.GetStatus()
-		log.Infof("Status: %s", status)
+
+		time.Sleep(30 * time.Second) // FIXME
 		cWait <- "ok"
 	}()
 
@@ -192,6 +190,7 @@ func (d *Driver) Create() error {
 		return fmt.Errorf("VM Spec Section empty")
 	}
 	vm.Refresh()
+
 	vm.VM.VmSpecSection.MemoryResourceMb.Configured = int64(d.MemorySizeMb)
 	vm.VM.VmSpecSection.NumCpus = &d.NumCpus
 	vm.VM.VmSpecSection.NumCoresPerSocket = &d.CoresPerSocket
@@ -202,32 +201,36 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	log.Infof("Clearing networks...")
-	empty := types.NetworkConnectionSection{}
-	vm.UpdateNetworkConnectionSection(&empty)
-	if err != nil {
-		return err
+	log.Infof("Configuring network...")
+	var netConn *types.NetworkConnection
+	var netSection *types.NetworkConnectionSection
+	if vm.VM.NetworkConnectionSection == nil {
+		netSection = &types.NetworkConnectionSection{}
+	} else {
+		netSection = vm.VM.NetworkConnectionSection
 	}
-	vm.Refresh()
 
-	log.Infof("Creating new network...")
-	netConn := &types.NetworkConnection{}
+	if len(netSection.NetworkConnection) < 1 {
+		netConn = &types.NetworkConnection{}
+		netSection.NetworkConnection = append(netSection.NetworkConnection, netConn)
+	}
+
+	netConn = netSection.NetworkConnection[0]
+
 	netConn.IPAddressAllocationMode = types.IPAllocationModePool
 	netConn.NetworkConnectionIndex = 0
+	netConn.IsConnected = true
+	netConn.NeedsCustomization = true
 	netConn.Network = d.VcdOrgVDCNetwork
-	netConn.NetworkAdapterType = "VMXNET3"
 
-	netsec := vm.VM.NetworkConnectionSection
-	netsec.NetworkConnection = append(netsec.NetworkConnection, netConn)
-	vm.UpdateNetworkConnectionSection(netsec)
+	vm.UpdateNetworkConnectionSection(netSection)
 
-	key, err := d.createSSHKey()
+	log.Infof("Setting up guest customization...")
+	sshCustomScript, err := d.getGuestCustomizationScript()
 	if err != nil {
 		return err
 	}
-	sshCustomScript := "echo \"" + strings.TrimSpace(key) + "\" > /root/.ssh/authorized_keys"
 
-	log.Infof("Setting up guest customization...")
 	enabled := true
 	vm.VM.GuestCustomizationSection.Enabled = &enabled
 	vm.VM.GuestCustomizationSection.CustomizationScript = sshCustomScript
@@ -245,7 +248,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	d.VAppHREF = d.VAppHREF
+	d.VAppHREF = vapp.VApp.HREF
 	d.VMHREF = vm.VM.HREF
 
 	return nil
@@ -366,30 +369,27 @@ func (d *Driver) GetIP() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	org, err := client.GetOrgByName(d.VcdOrg)
-	if err != nil {
-		return "", err
-	}
-	vdc, err := org.GetVDCByName(d.VcdVdc, false)
-	if err != nil {
-		return "", err
-	}
-	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
+
+	vm := govcd.NewVM(&client.Client)
+	vm.VM.HREF = d.VMHREF
+	err = vm.Refresh()
 	if err != nil {
 		return "", err
 	}
 
 	// We assume that the vApp has only one VM with only one NIC
-	for _, vm := range vapp.VApp.Children.VM {
-		if vm.NetworkConnectionSection != nil {
-			networks := vm.NetworkConnectionSection.NetworkConnection
-			for _, n := range networks {
-				if n.ExternalIPAddress != "" {
-					return n.ExternalIPAddress, nil
-				}
+	if vm.VM.NetworkConnectionSection != nil {
+		networks := vm.VM.NetworkConnectionSection.NetworkConnection
+		for _, n := range networks {
+			if n.ExternalIPAddress != "" {
+				return n.ExternalIPAddress, nil
+			}
+			if n.IPAddress != "" { // perhaps this is too opinionated ?
+				return n.IPAddress, nil
 			}
 		}
 	}
+
 	return "", fmt.Errorf("could not get public IP")
 }
 
@@ -417,25 +417,15 @@ func (d *Driver) GetState() (state.State, error) {
 	if err != nil {
 		return state.Error, err
 	}
-	org, err := client.GetOrgByName(d.VcdOrg)
-	if err != nil {
-		return state.Error, err
-	}
-	vdc, err := org.GetVDCByName(d.VcdVdc, false)
-	if err != nil {
-		return state.Error, err
-	}
-	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
+	vapp := govcd.NewVApp(&client.Client)
+	vapp.VApp.HREF = d.VAppHREF
+	err = vapp.Refresh()
 	if err != nil {
 		return state.Error, err
 	}
 
 	status, err := vapp.GetStatus()
 	if err != nil {
-		return state.Error, err
-	}
-
-	if err = client.Disconnect(); err != nil {
 		return state.Error, err
 	}
 
@@ -454,15 +444,9 @@ func (d *Driver) Kill() error {
 	if err != nil {
 		return err
 	}
-	org, err := client.GetOrgByName(d.VcdOrg)
-	if err != nil {
-		return err
-	}
-	vdc, err := org.GetVDCByName(d.VcdVdc, false)
-	if err != nil {
-		return err
-	}
-	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
+	vapp := govcd.NewVApp(&client.Client)
+	vapp.VApp.HREF = d.VAppHREF
+	err = vapp.Refresh()
 	if err != nil {
 		return err
 	}
@@ -475,9 +459,6 @@ func (d *Driver) Kill() error {
 		return err
 	}
 
-	if err = client.Disconnect(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -492,21 +473,16 @@ func (d *Driver) Remove() error {
 	if err != nil {
 		return err
 	}
-	org, err := client.GetOrgByName(d.VcdOrg)
-	if err != nil {
-		return err
-	}
-	vdc, err := org.GetVDCByName(d.VcdVdc, false)
-	if err != nil {
-		return err
-	}
-	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
+	vapp := govcd.NewVApp(&client.Client)
+	vapp.VApp.HREF = d.VAppHREF
+	err = vapp.Refresh()
 	if err != nil {
 		return err
 	}
 
-	if vapp.VApp.Status != 8 { // powered off
-		task, err := vapp.PowerOff()
+	status, _ := vapp.GetStatus()
+	if status != "POWERED_OFF" {
+		task, err := vapp.PowerOff() // we no longer care, so no shutdown
 		if err != nil {
 			return err
 		}
@@ -522,6 +498,7 @@ func (d *Driver) Remove() error {
 	if err = task.WaitTaskCompletion(); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -532,15 +509,9 @@ func (d *Driver) Restart() error {
 	if err != nil {
 		return err
 	}
-	org, err := client.GetOrgByName(d.VcdOrg)
-	if err != nil {
-		return err
-	}
-	vdc, err := org.GetVDCByName(d.VcdVdc, false)
-	if err != nil {
-		return err
-	}
-	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
+	vapp := govcd.NewVApp(&client.Client)
+	vapp.VApp.HREF = d.VAppHREF
+	err = vapp.Refresh()
 	if err != nil {
 		return err
 	}
@@ -552,9 +523,6 @@ func (d *Driver) Restart() error {
 		return err
 	}
 
-	if err = client.Disconnect(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -603,15 +571,9 @@ func (d *Driver) Start() error {
 	if err != nil {
 		return err
 	}
-	org, err := client.GetOrgByName(d.VcdOrg)
-	if err != nil {
-		return err
-	}
-	vdc, err := org.GetVDCByName(d.VcdVdc, false)
-	if err != nil {
-		return err
-	}
-	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
+	vapp := govcd.NewVApp(&client.Client)
+	vapp.VApp.HREF = d.VAppHREF
+	err = vapp.Refresh()
 	if err != nil {
 		return err
 	}
@@ -623,9 +585,6 @@ func (d *Driver) Start() error {
 		return err
 	}
 
-	if err = client.Disconnect(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -635,15 +594,9 @@ func (d *Driver) Stop() error {
 	if err != nil {
 		return err
 	}
-	org, err := client.GetOrgByName(d.VcdOrg)
-	if err != nil {
-		return err
-	}
-	vdc, err := org.GetVDCByName(d.VcdVdc, false)
-	if err != nil {
-		return err
-	}
-	vapp, err := vdc.GetVAppByHref(d.VAppHREF)
+	vapp := govcd.NewVApp(&client.Client)
+	vapp.VApp.HREF = d.VAppHREF
+	err = vapp.Refresh()
 	if err != nil {
 		return err
 	}
@@ -655,8 +608,5 @@ func (d *Driver) Stop() error {
 		return err
 	}
 
-	if err = client.Disconnect(); err != nil {
-		return err
-	}
 	return nil
 }

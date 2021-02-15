@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/docker/machine/libmachine/mcnutils"
@@ -33,6 +34,23 @@ func (d *Driver) createSSHKey() (string, error) {
 
 func (d *Driver) publicSSHKeyPath() string {
 	return d.GetSSHKeyPath() + ".pub"
+}
+
+func (d *Driver) getGuestCustomizationScript() (string, error) {
+	key, err := d.createSSHKey()
+	if err != nil {
+		return "", err
+	}
+	sshCustomScript := `#!/bin/bash
+if [ x$1 == x"precustomization" ]; then
+	echo 'Precustom'
+elif [ x$1 == x"postcustomization" ]; then
+	mkdir -p /root/.ssh
+	echo '%s' >> /root/.ssh/authorized_keys
+	chmod -R go-rwx /root/.ssh
+fi`
+	sshCustomScript = fmt.Sprintf(sshCustomScript, strings.TrimSpace(key))
+	return sshCustomScript, nil
 }
 
 func newClient(apiURL url.URL, user, password, org string, insecure bool) (*govcd.VCDClient, error) {
