@@ -168,13 +168,28 @@ func (d *Driver) Create() error {
 			time.Sleep(5 * time.Second)
 		}
 
-		time.Sleep(30 * time.Second) // FIXME
+		for {
+			vapp.Refresh()
+			if err != nil {
+				cWait <- "err"
+				return
+			}
+			if vapp.VApp.Tasks == nil {
+				time.Sleep(10) // let's give this old chap some time
+				break
+
+			}
+			time.Sleep(5 * time.Second)
+		}
+
 		cWait <- "ok"
 	}()
 
 	select {
 	case res := <-cWait:
-		fmt.Println(res)
+		if res == "err" {
+			return fmt.Errorf("Error waiting for vApp deploy")
+		}
 	case <-time.After(15 * time.Minute):
 		return fmt.Errorf("Reached timeout while deploying VM")
 	}
