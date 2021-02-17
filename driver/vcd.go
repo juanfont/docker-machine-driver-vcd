@@ -27,16 +27,14 @@ type Driver struct {
 	Catalog          string
 	Template         string
 
-	DockerPort        int
-	NumCpus           int
-	CoresPerSocket    int
-	MemorySizeMb      int
-	VAppName          string
-	VAppHREF          string
-	VMHREF            string
-	Description       string
-	StorageProfile    string
-	MachineNamePrefix string
+	DockerPort     int
+	NumCpus        int
+	CoresPerSocket int
+	MemorySizeMb   int
+	VAppHREF       string
+	VMHREF         string
+	Description    string
+	StorageProfile string
 }
 
 const (
@@ -50,7 +48,6 @@ const (
 
 	defaultDescription    = "Created with Docker Machine"
 	defaultStorageProfile = ""
-	defaultNamePrefix     = "docker-machine"
 )
 
 func NewDriver(hostName, storePath string) drivers.Driver {
@@ -124,20 +121,14 @@ func (d *Driver) Create() error {
 		}
 	}
 
-	if d.MachineNamePrefix != "" {
-		d.VAppName = fmt.Sprintf("%s-%s", d.MachineNamePrefix, d.MachineName)
-	} else {
-		d.VAppName = d.MachineName
-	}
-
-	log.Infof("Creating a new vApp: %s...", d.VAppName)
+	log.Infof("Creating a new vApp: %s...", d.MachineName)
 	networks := []*types.OrgVDCNetwork{}
 	networks = append(networks, net.OrgVDCNetwork)
 	task, err := vdc.ComposeVApp(
 		networks,
 		vapptemplate,
 		storageProfile,
-		d.VAppName,
+		d.MachineName,
 		d.Description,
 		true)
 
@@ -148,7 +139,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	vapp, err := vdc.GetVAppByName(d.VAppName, true)
+	vapp, err := vdc.GetVAppByName(d.MachineName, true)
 	if err != nil {
 		return err
 	}
@@ -352,12 +343,6 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Name:   "vcd-description",
 			Usage:  "vCloud Director VApp Description",
 			Value:  defaultDescription,
-		},
-		mcnflag.StringFlag{
-			EnvVar: "VCD_NAME_PREFIX",
-			Name:   "vcd-name-prefix",
-			Usage:  "vCloud Director VApp Name Prefix",
-			Value:  defaultNamePrefix,
 		},
 	}
 }
@@ -565,7 +550,6 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.MemorySizeMb = flags.Int("vcd-memory-size-mb")
 	d.StorageProfile = flags.String("vcd-storageprofile")
 	d.Description = flags.String("vcd-description")
-	d.MachineNamePrefix = flags.String("vcd-name-prefix")
 
 	return nil
 }
