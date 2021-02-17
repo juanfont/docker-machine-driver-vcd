@@ -143,6 +143,7 @@ func (d *Driver) Create() error {
 	if err != nil {
 		return err
 	}
+	d.VAppHREF = vapp.VApp.HREF
 
 	if len(vapp.VApp.Children.VM) != 1 {
 		return fmt.Errorf("VM count != 1")
@@ -155,6 +156,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 	log.Infof("Found VM: %s...", vm.VM.Name)
+	d.VMHREF = vm.VM.HREF
 
 	cWait := make(chan string, 1)
 	go func() {
