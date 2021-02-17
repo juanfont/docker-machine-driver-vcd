@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/machine/libmachine/log"
 	"github.com/docker/machine/libmachine/mcnutils"
 	"github.com/docker/machine/libmachine/ssh"
 	"github.com/vmware/go-vcloud-director/v2/govcd"
@@ -51,6 +52,73 @@ elif [ x$1 == x"postcustomization" ]; then
 fi`
 	sshCustomScript = fmt.Sprintf(sshCustomScript, strings.TrimSpace(key))
 	return sshCustomScript, nil
+}
+
+func (d *Driver) getVApp() (*govcd.VApp, error) {
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
+	if err != nil {
+		return nil, err
+	}
+
+	if d.VAppHREF != "" { // this is way quicker
+		vapp := govcd.NewVApp(&client.Client)
+		vapp.VApp.HREF = d.VAppHREF
+		err = vapp.Refresh()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	log.Infof("Trying alternative method to fetch the vApp...")
+	org, err := client.GetOrgByName(d.VcdOrg)
+	if err != nil {
+		return nil, err
+	}
+	vdc, err := org.GetVDCByName(d.VcdVdc, false)
+	if err != nil {
+		return nil, err
+	}
+	vapp, err := vdc.GetVAppByName(d.MachineName, true)
+	if err != nil {
+		return nil, err
+	}
+	d.VAppHREF = vapp.VApp.HREF
+	return vapp, nil
+}
+
+func (d *Driver) getVM() (*govcd.VM, error) {
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
+	if err != nil {
+		return nil, err
+	}
+	if d.VMHREF != "" {
+		vm := govcd.NewVM(&client.Client)
+		vm.VM.HREF = d.VMHREF
+		err = vm.Refresh()
+		if err != nil {
+			return vm, nil
+		}
+	}
+
+	log.Infof("Trying alternative method to fetch the VM...")
+	vapp, err := d.getVApp()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(vapp.VApp.Children.VM) != 1 {
+		return nil, fmt.Errorf("VM count != 1")
+	}
+	vm := govcd.NewVM(&client.Client)
+	vm.VM.HREF = vapp.VApp.Children.VM[0].HREF
+	err = vm.Refresh()
+	if err != nil {
+		return nil, err
+	}
+
+	d.VMHREF = vm.VM.HREF
+	return vm, nil
+
 }
 
 func newClient(apiURL url.URL, user, password, org string, insecure bool) (*govcd.VCDClient, error) {

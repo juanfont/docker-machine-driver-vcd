@@ -350,14 +350,7 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 // GetIP returns an IP or hostname that this host is available at
 // e.g. 1.2.3.4 or docker-host-d60b70a14d3a.cloudapp.net
 func (d *Driver) GetIP() (string, error) {
-	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
-	if err != nil {
-		return "", err
-	}
-
-	vm := govcd.NewVM(&client.Client)
-	vm.VM.HREF = d.VMHREF
-	err = vm.Refresh()
+	vm, err := d.getVM()
 	if err != nil {
 		return "", err
 	}
@@ -398,13 +391,7 @@ func (d *Driver) GetURL() (string, error) {
 
 // GetState returns the state that the host is in (running, stopped, etc)
 func (d *Driver) GetState() (state.State, error) {
-	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
-	if err != nil {
-		return state.Error, err
-	}
-	vapp := govcd.NewVApp(&client.Client)
-	vapp.VApp.HREF = d.VAppHREF
-	err = vapp.Refresh()
+	vapp, err := d.getVApp()
 	if err != nil {
 		return state.Error, err
 	}
@@ -425,13 +412,7 @@ func (d *Driver) GetState() (state.State, error) {
 
 // Kill stops a host forcefully
 func (d *Driver) Kill() error {
-	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
-	if err != nil {
-		return err
-	}
-	vapp := govcd.NewVApp(&client.Client)
-	vapp.VApp.HREF = d.VAppHREF
-	err = vapp.Refresh()
+	vapp, err := d.getVApp()
 	if err != nil {
 		return err
 	}
@@ -454,13 +435,7 @@ func (d *Driver) PreCreateCheck() error {
 
 // Remove a host
 func (d *Driver) Remove() error {
-	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
-	if err != nil {
-		return err
-	}
-	vapp := govcd.NewVApp(&client.Client)
-	vapp.VApp.HREF = d.VAppHREF
-	err = vapp.Refresh()
+	vapp, err := d.getVApp()
 	if err != nil {
 		return err
 	}
@@ -495,16 +470,11 @@ func (d *Driver) Remove() error {
 // Restart a host. This may just call Stop(); Start() if the provider does not
 // have any special restart behaviour.
 func (d *Driver) Restart() error {
-	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
+	vapp, err := d.getVApp()
 	if err != nil {
 		return err
 	}
-	vapp := govcd.NewVApp(&client.Client)
-	vapp.VApp.HREF = d.VAppHREF
-	err = vapp.Refresh()
-	if err != nil {
-		return err
-	}
+
 	task, err := vapp.Reboot()
 	if err != nil {
 		return err
@@ -556,16 +526,11 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 
 // Start a host
 func (d *Driver) Start() error {
-	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
+	vapp, err := d.getVApp()
 	if err != nil {
 		return err
 	}
-	vapp := govcd.NewVApp(&client.Client)
-	vapp.VApp.HREF = d.VAppHREF
-	err = vapp.Refresh()
-	if err != nil {
-		return err
-	}
+
 	task, err := vapp.PowerOn()
 	if err != nil {
 		return err
@@ -579,16 +544,11 @@ func (d *Driver) Start() error {
 
 // Stop a host not so gracefully
 func (d *Driver) Stop() error {
-	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
+	vapp, err := d.getVApp()
 	if err != nil {
 		return err
 	}
-	vapp := govcd.NewVApp(&client.Client)
-	vapp.VApp.HREF = d.VAppHREF
-	err = vapp.Refresh()
-	if err != nil {
-		return err
-	}
+
 	task, err := vapp.PowerOff()
 	if err != nil {
 		return err
