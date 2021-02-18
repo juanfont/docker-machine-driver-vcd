@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/machine/libmachine/log"
 	"github.com/docker/machine/libmachine/mcnutils"
 	"github.com/docker/machine/libmachine/ssh"
 	"github.com/vmware/go-vcloud-director/v2/govcd"
@@ -61,7 +60,6 @@ func (d *Driver) getVApp() (*govcd.VApp, error) {
 	}
 
 	if d.VAppHREF != "" { // this is way quicker
-		log.Infof("Fetching vApp the quick way")
 		vapp := govcd.NewVApp(&client.Client)
 		vapp.VApp.HREF = d.VAppHREF
 		err = vapp.Refresh()
@@ -71,7 +69,6 @@ func (d *Driver) getVApp() (*govcd.VApp, error) {
 		return vapp, nil
 	}
 
-	log.Infof("Trying alternative method to fetch the vApp...")
 	org, err := client.GetOrgByName(d.VcdOrg)
 	if err != nil {
 		return nil, err
@@ -94,7 +91,6 @@ func (d *Driver) getVM() (*govcd.VM, error) {
 		return nil, err
 	}
 	if d.VMHREF != "" {
-		log.Infof("Fetching VM the quick way")
 		vm := govcd.NewVM(&client.Client)
 		vm.VM.HREF = d.VMHREF
 		err = vm.Refresh()
@@ -104,7 +100,6 @@ func (d *Driver) getVM() (*govcd.VM, error) {
 		return vm, nil
 	}
 
-	log.Infof("Trying alternative method to fetch the VM...")
 	vapp, err := d.getVApp()
 	if err != nil {
 		return nil, err
