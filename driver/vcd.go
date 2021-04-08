@@ -576,3 +576,22 @@ func (d *Driver) Stop() error {
 
 	return nil
 }
+
+func (d *Driver) runCommands(commands []string) error {
+	// provisioner := provision.GenericProvisioner{
+	// 	Driver: d,
+	// }
+
+	// fmt.Println(provisioner.GetOsReleaseInfo())
+
+	for _, c := range commands {
+		fmt.Printf("Running: '%s'\n", c)
+		// _, err := provisioner.SSHCommand(c)
+		_, err := drivers.RunSSHCommandFromDriver(d, c)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+	return nil
+}
