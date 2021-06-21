@@ -20,6 +20,7 @@ archives:
       - linux-armhf
       - linux-amd64
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format: binary
     # wrap_in_directory: true
 
 checksum:
