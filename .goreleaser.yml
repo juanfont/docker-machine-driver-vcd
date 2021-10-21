@@ -21,10 +21,7 @@ builds:
     env:
       - CGO_ENABLED=1
       - CC=aarch64-linux-gnu-gcc
-    main: ./cmd/headscale/headscale.go
     mod_timestamp: '{{ .CommitTimestamp }}'
-    ldflags:
-      - -s -w -X github.com/juanfont/headscale/cmd/headscale/cli.Version=v{{.Version}}
 
 archives:
   - id: golang-cross
