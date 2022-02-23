@@ -14,6 +14,23 @@ import (
 	"github.com/vmware/go-vcloud-director/v2/govcd"
 )
 
+func (d *Driver) vcdSeemsAlive() bool {
+	client, err := newClient(*d.VcdURL, d.VcdUser, d.VcdPassword, d.VcdOrg, d.VcdInsecure)
+	if err != nil {
+		return false
+	}
+	org, err := client.GetOrgByName(d.VcdOrg)
+	if err != nil {
+		return false
+	}
+	vdc, err := org.GetVDCByName(d.VcdVdc, false)
+	if err != nil {
+		return false
+	}
+	_, err = vdc.GetOrgVdcNetworkByName(d.VcdOrgVDCNetwork, true)
+	return err == nil
+}
+
 func generateVMName(prefix string) string {
 	randomID := mcnutils.TruncateID(mcnutils.GenerateRandomID())
 	return fmt.Sprintf("%s-%s", prefix, randomID)

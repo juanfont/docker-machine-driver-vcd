@@ -27,14 +27,15 @@ type Driver struct {
 	Catalog          string
 	Template         string
 
-	DockerPort     int
-	NumCpus        int
-	CoresPerSocket int
-	MemorySizeMb   int
-	VAppHREF       string
-	VMHREF         string
-	Description    string
-	StorageProfile string
+	DockerPort       int
+	NumCpus          int
+	CoresPerSocket   int
+	MemorySizeMb     int
+	VAppHREF         string
+	VMHREF           string
+	Description      string
+	StorageProfile   string
+	DeleteWhenFailed bool // delete the VM from the docker-machine DB when something goes wrong
 }
 
 const (
@@ -46,8 +47,9 @@ const (
 	defaultSSHPort        = 22
 	defaultDockerPort     = 2376
 
-	defaultDescription    = "Created with Docker Machine"
-	defaultStorageProfile = ""
+	defaultDescription      = "Created with Docker Machine"
+	defaultStorageProfile   = ""
+	defaultDeleteWhenFailed = true
 )
 
 func NewDriver(hostName, storePath string) drivers.Driver {
@@ -63,8 +65,9 @@ func NewDriver(hostName, storePath string) drivers.Driver {
 			MachineName: hostName,
 			StorePath:   storePath,
 		},
-		Description:    defaultDescription,
-		StorageProfile: defaultStorageProfile,
+		Description:      defaultDescription,
+		StorageProfile:   defaultStorageProfile,
+		DeleteWhenFailed: defaultDeleteWhenFailed,
 	}
 }
 
@@ -175,7 +178,7 @@ func (d *Driver) Create() error {
 				return
 			}
 			if vapp.VApp.Tasks == nil {
-				time.Sleep(10) // let's give this old chap some time
+				time.Sleep(15 * time.Second) // let's give this old chap some time
 				break
 
 			}
@@ -188,10 +191,10 @@ func (d *Driver) Create() error {
 	select {
 	case res := <-cWait:
 		if res == "err" {
-			return fmt.Errorf("Error waiting for vApp deploy")
+			return fmt.Errorf("error waiting for vApp deploy")
 		}
 	case <-time.After(15 * time.Minute):
-		return fmt.Errorf("Reached timeout while deploying VM")
+		return fmt.Errorf("reached timeout while deploying VM")
 	}
 
 	if vm.VM.VmSpecSection == nil {
@@ -361,6 +364,11 @@ func (d *Driver) GetCreateFlags() []mcnflag.Flag {
 			Usage:  "vCloud Director VApp Description",
 			Value:  defaultDescription,
 		},
+		mcnflag.BoolFlag{
+			EnvVar: "VCD_DELETE_WHEN_FAILED",
+			Name:   "vcd-delete-when-failed",
+			Usage:  "Delete the VM from the docker-machine DB when something goes wrong",
+		},
 	}
 }
 
@@ -452,9 +460,30 @@ func (d *Driver) PreCreateCheck() error {
 
 // Remove a host
 func (d *Driver) Remove() error {
-	vapp, err := d.getVApp()
+	var vapp *govcd.VApp
+	var err error
+
+	vapp, err = d.getVApp()
 	if err != nil {
-		return err
+		log.Warnf("Co!uld not get the vapp %s from vCloud: %s", d.MachineName, err)
+		if !d.DeleteWhenFailed { // if we are not faking the deletions we just send back the error
+			log.Warnf("Not deleting machine as DeleteWhenFailed is not set")
+			return err
+		}
+
+		// if vcd seems to be alive, we try again to get the vApp. If that fails we just assume the vApp is gone
+		// and we lie to docker-machine saying that we succeded
+		if d.vcdSeemsAlive() {
+			log.Warnf("vcd seems to be alive, trying to get the vApp again")
+			vapp, err = d.getVApp()
+			if err != nil {
+				log.Warnf("We could not get the vApp again. Assuming is deleted indeed, and reporting success to docker-machine")
+				return nil
+			}
+		} else {
+			log.Warnf("We could not delete the machine, vcd seems to be dead")
+			return err
+		}
 	}
 
 	task, err := vapp.PowerOff()
@@ -520,7 +549,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 
 	// Check for required Params
 	if vcdURL == "" || d.VcdOrg == "" || d.VcdVdc == "" || d.VcdUser == "" || d.VcdPassword == "" || d.VcdOrgVDCNetwork == "" || d.Catalog == "" || d.Template == "" {
-		return fmt.Errorf("Please specify the mandatory parameters: -vcd-url, -vcd-org, -vcd-vdc, -vcd-user, -vcd-password, -vcd-orgvdcnetwork, -catalog, -template")
+		return fmt.Errorf("please specify the mandatory parameters: -vcd-url, -vcd-org, -vcd-vdc, -vcd-user, -vcd-password, -vcd-orgvdcnetwork, -catalog, -template")
 	}
 
 	u, err := url.ParseRequestURI(vcdURL)
@@ -537,6 +566,7 @@ func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
 	d.MemorySizeMb = flags.Int("vcd-memory-size-mb")
 	d.StorageProfile = flags.String("vcd-storageprofile")
 	d.Description = flags.String("vcd-description")
+	d.DeleteWhenFailed = flags.Bool("vcd-delete-when-failed")
 
 	return nil
 }
