@@ -86,23 +86,24 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	log.Infof("Finding network...")
+	log.Infof("Finding OrgVdc network by name (%s)...", d.VcdOrgVDCNetwork)
 	net, err := vdc.GetOrgVdcNetworkByName(d.VcdOrgVDCNetwork, true)
 	if err != nil {
 		return err
 	}
 
-	log.Infof("Finding catalog...")
+	log.Infof("Finding catalog by name (%s)...", d.Catalog)
 	catalog, err := org.GetCatalogByName(d.Catalog, true)
 	if err != nil {
 		return err
 	}
 
-	log.Infof("Finding template...")
+	log.Infof("Finding template by name (%s)...", d.Template)
 	template, err := catalog.GetCatalogItemByName(d.Template, true)
 	if err != nil {
 		return err
 	}
+
 	vapptemplate, err := template.GetVAppTemplate()
 	if err != nil {
 		return err
