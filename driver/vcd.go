@@ -432,6 +432,8 @@ func (d *Driver) GetState() (state.State, error) {
 		return state.Running, nil
 	case "POWERED_OFF":
 		return state.Stopped, nil
+	default:
+		log.Warnf("Unknown status: %s", status)
 	}
 	return state.None, nil
 }
@@ -466,7 +468,7 @@ func (d *Driver) Remove() error {
 
 	vapp, err = d.getVApp()
 	if err != nil {
-		log.Warnf("Co!uld not get the vapp %s from vCloud: %s", d.MachineName, err)
+		log.Warnf("Could not get the vapp %s from vCloud: %s", d.MachineName, err)
 		if !d.DeleteWhenFailed { // if we are not faking the deletions we just send back the error
 			log.Warnf("Not deleting machine as DeleteWhenFailed is not set")
 			return err
@@ -490,14 +492,6 @@ func (d *Driver) Remove() error {
 	task, err := vapp.PowerOff()
 	if err == nil {
 		log.Infof("Powering off...")
-		if err = task.WaitTaskCompletion(); err != nil {
-			return err
-		}
-	}
-
-	task, err = vapp.Undeploy()
-	if err == nil {
-		log.Infof("Undeploying...")
 		if err = task.WaitTaskCompletion(); err != nil {
 			return err
 		}
