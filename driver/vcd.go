@@ -432,8 +432,12 @@ func (d *Driver) GetState() (state.State, error) {
 		return state.Running, nil
 	case "POWERED_OFF":
 		return state.Stopped, nil
+	case "MIXED":
+		return state.Error, nil
+	case "UNRESOLVED":
+		return state.Error, nil
 	default:
-		log.Warnf("Unknown status: %s", status)
+		log.Warnf("Unhandled status: %s", status)
 	}
 	return state.None, nil
 }
