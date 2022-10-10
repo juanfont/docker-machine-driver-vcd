@@ -417,12 +417,12 @@ func (d *Driver) GetURL() (string, error) {
 
 // GetState returns the state that the host is in (running, stopped, etc)
 func (d *Driver) GetState() (state.State, error) {
-	vapp, err := d.getVApp()
+	vm, err := d.getVM()
 	if err != nil {
 		return state.Error, err
 	}
 
-	status, err := vapp.GetStatus()
+	status, err := vm.GetStatus()
 	if err != nil {
 		return state.Error, err
 	}
@@ -449,7 +449,7 @@ func (d *Driver) Kill() error {
 		return err
 	}
 
-	task, err := vapp.Shutdown()
+	task, err := vapp.PowerOff()
 	if err != nil {
 		log.Warnf("Error shutting down vApp: %s", err)
 	}
@@ -467,6 +467,7 @@ func (d *Driver) PreCreateCheck() error {
 
 // Remove a host
 func (d *Driver) Remove() error {
+	log.Infof("Removing %s...", d.MachineName)
 	var vapp *govcd.VApp
 	var err error
 
@@ -493,19 +494,23 @@ func (d *Driver) Remove() error {
 		}
 	}
 
-	task, err := vapp.Shutdown()
+	task, err := vapp.Undeploy()
 	if err == nil {
-		log.Infof("Shutting off the vapp...")
+		log.Infof("Undeploy the vapp for deletion...")
 		if err = task.WaitTaskCompletion(); err != nil {
-			log.Warnf("Could not shutdown the vApp: %s", err)
+			log.Warnf("Could undeploy the vApp: %s", err)
 		}
+	} else {
+		log.Warnf("Could undeploy the vApp: %s", err)
 	}
 
 	task, err = vapp.Delete()
 	if err != nil {
+		log.Errorf("Could not delete the vApp: %s", err)
 		return err
 	}
 	if err = task.WaitTaskCompletion(); err != nil {
+		log.Errorf("Error waiting to delete the vApp: %s", err)
 		return err
 	}
 
@@ -595,7 +600,7 @@ func (d *Driver) Stop() error {
 		return err
 	}
 
-	task, err := vapp.Shutdown()
+	task, err := vapp.PowerOff()
 	if err != nil {
 		return err
 	}
