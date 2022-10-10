@@ -449,12 +449,12 @@ func (d *Driver) Kill() error {
 		return err
 	}
 
-	task, err := vapp.PowerOff()
+	task, err := vapp.Shutdown()
 	if err != nil {
-		return err
+		log.Warnf("Error shutting down vApp: %s", err)
 	}
 	if err = task.WaitTaskCompletion(); err != nil {
-		return err
+		log.Warnf("Error waiting for shutting down vApp: %s", err)
 	}
 
 	return nil
@@ -493,11 +493,11 @@ func (d *Driver) Remove() error {
 		}
 	}
 
-	task, err := vapp.PowerOff()
+	task, err := vapp.Shutdown()
 	if err == nil {
-		log.Infof("Powering off...")
+		log.Infof("Shutting off the vapp...")
 		if err = task.WaitTaskCompletion(); err != nil {
-			return err
+			log.Warnf("Could not shutdown the vApp: %s", err)
 		}
 	}
 
@@ -595,7 +595,7 @@ func (d *Driver) Stop() error {
 		return err
 	}
 
-	task, err := vapp.PowerOff()
+	task, err := vapp.Shutdown()
 	if err != nil {
 		return err
 	}
