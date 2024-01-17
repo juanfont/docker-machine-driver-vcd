@@ -135,7 +135,6 @@ func (d *Driver) Create() error {
 		d.MachineName,
 		d.Description,
 		true)
-
 	if err != nil {
 		return err
 	}
@@ -436,6 +435,9 @@ func (d *Driver) GetState() (state.State, error) {
 		return state.Error, nil
 	case "UNRESOLVED":
 		return state.Error, nil
+	case "PARTIALLY_POWERED_OFF":
+		return state.Error, nil
+
 	default:
 		log.Warnf("Unhandled status: %s", status)
 	}
