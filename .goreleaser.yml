@@ -13,23 +13,10 @@ builds:
       - amd64
     mod_timestamp: "{{ .CommitTimestamp }}"
 
-  - id: linux-arm64
-    goos:
-      - linux
-    goarch:
-      - arm64
-    env:
-      - CGO_ENABLED=1
-      - CC=aarch64-linux-gnu-gcc
-    mod_timestamp: '{{ .CommitTimestamp }}'
-
 archives:
   - id: golang-cross
     builds:
-      - darwin-amd64
-      - linux-armhf
       - linux-amd64
-      - linux-arm64
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format: binary
     # wrap_in_directory: true

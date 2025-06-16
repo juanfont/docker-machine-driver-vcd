@@ -11,7 +11,11 @@ import (
 
 	"github.com/docker/machine/libmachine/mcnutils"
 	"github.com/docker/machine/libmachine/ssh"
-	"github.com/vmware/go-vcloud-director/v2/govcd"
+	"github.com/vmware/go-vcloud-director/v3/govcd"
+)
+
+const (
+	VCDAPIVersion = "38.1"
 )
 
 func (d *Driver) vcdSeemsAlive() bool {
@@ -134,13 +138,12 @@ func (d *Driver) getVM() (*govcd.VM, error) {
 
 	d.VMHREF = vm.VM.HREF
 	return vm, nil
-
 }
 
 func newClient(apiURL url.URL, user, password, org string, insecure bool) (*govcd.VCDClient, error) {
 	vcdclient := &govcd.VCDClient{
 		Client: govcd.Client{
-			APIVersion: "36.3",
+			APIVersion: VCDAPIVersion,
 			VCDHREF:    apiURL,
 			Http: http.Client{
 				Transport: &http.Transport{
