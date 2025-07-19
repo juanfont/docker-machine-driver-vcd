@@ -262,6 +262,16 @@ func (d *Driver) Create() error {
 	d.VAppHREF = vapp.VApp.HREF
 	d.VMHREF = vm.VM.HREF
 
+	// HACK HACK HACK to fix issues with vcd 10.6
+	time.Sleep(120 * time.Second)
+	task, err = vapp.Reset()
+	if err != nil {
+		return err
+	}
+	if err = task.WaitTaskCompletion(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
